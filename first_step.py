@@ -218,3 +218,137 @@ def get_recent_responses() -> list:
                     )
 
     return result
+
+def read_instruction_data() -> tuple:
+    input_text = input("input: ")
+    actor_id = int(input("actor id: "))
+    description = input("description: ")
+    tags = input("tags: ")
+    stage = input("stage: ")
+
+    return (
+        input_text,
+        actor_id,
+        description,
+        tags,
+        stage,
+    )
+
+
+def read_response_data() -> tuple:
+    output = input("output: ")
+    stage = input("stage: ")
+    failure = input("failure: ")
+    instruction_id = int(input("instruction id: "))
+
+    return (
+        output,
+        stage,
+        failure,
+        instruction_id,
+    )
+
+
+def handle_actor_command(command: str) -> bool:
+    match command:
+        case "create_actor":
+            platform = input("platform: ")
+            user_agent = input("user agent: ")
+            print(create_actor(platform, user_agent))
+
+        case "get_actors":
+            print(get_actors())
+
+        case "delete_actor":
+            uid = int(input("uid: "))
+            print(delete_actor(uid))
+
+        case "update_actor":
+            uid = int(input("uid: "))
+            platform = input("platform: ")
+            user_agent = input("user agent: ")
+            print(update_actor(uid, platform, user_agent))
+
+        case _:
+            return False
+
+    return True
+
+
+def handle_instruction_command(command: str) -> bool:
+    match command:
+        case "create_instruction":
+            data = read_instruction_data()
+            print(create_instruction(*data))
+
+        case "get_instructions":
+            print(get_instructions())
+
+        case "delete_instruction":
+            uid = int(input("uid: "))
+            print(delete_instruction(uid))
+
+        case "update_instruction":
+            uid = int(input("uid: "))
+            data = read_instruction_data()
+            print(update_instruction(uid, *data))
+
+        case _:
+            return False
+
+    return True
+
+
+def handle_response_command(command: str) -> bool:
+    match command:
+        case "create_response":
+            data = read_response_data()
+            print(create_response(*data))
+
+        case "get_responses":
+            print(get_responses())
+
+        case "delete_response":
+            uid = int(input("uid: "))
+            print(delete_response(uid))
+
+        case "update_response":
+            uid = int(input("uid: "))
+            data = read_response_data()
+            print(update_response(uid, *data))
+
+        case _:
+            return False
+
+    return True
+
+
+def repl() -> None:
+    while True:
+        command = input("> ").strip()
+
+        if command == "exit":
+            break
+
+        try:
+            if handle_actor_command(command):
+                continue
+
+            if handle_instruction_command(command):
+                continue
+
+            if handle_response_command(command):
+                continue
+
+            if command == "recent":
+                print(get_recent_responses())
+                continue
+
+            print("Unknown command")
+
+        except ValueError as error:
+            print("Error:", error)
+
+
+if __name__ == "__main__":
+    repl()
