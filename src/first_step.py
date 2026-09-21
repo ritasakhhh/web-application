@@ -1,6 +1,5 @@
 import datetime
 
-
 SIX_MINUTES = 6 * 60
 
 actors = []
@@ -28,8 +27,8 @@ def has_id(table: list, uid: int) -> bool:
 
 
 def create_actor(
-    platform: str,
-    user_agent: str,
+        platform: str,
+        user_agent: str,
 ) -> tuple:
     actor = (
         get_next_id(actors),
@@ -56,9 +55,9 @@ def delete_actor(uid: int) -> bool:
 
 
 def update_actor(
-    uid: int,
-    platform: str,
-    user_agent: str,
+        uid: int,
+        platform: str,
+        user_agent: str,
 ) -> tuple:
     for index, actor in enumerate(actors):
         if actor[0] == uid:
@@ -74,12 +73,13 @@ def update_actor(
 
     raise ValueError("Actor not found")
 
+
 def create_instruction(
-    input_text: str,
-    actor_id: int,
-    description: str,
-    tags: str,
-    stage: str,
+        input_text: str,
+        actor_id: int,
+        description: str,
+        tags: str,
+        stage: str,
 ) -> tuple:
     if not has_id(actors, actor_id):
         raise ValueError("Actor not found")
@@ -112,12 +112,12 @@ def delete_instruction(uid: int) -> bool:
 
 
 def update_instruction(
-    uid: int,
-    input_text: str,
-    actor_id: int,
-    description: str,
-    tags: str,
-    stage: str,
+        uid: int,
+        input_text: str,
+        actor_id: int,
+        description: str,
+        tags: str,
+        stage: str,
 ) -> tuple:
     if not has_id(actors, actor_id):
         raise ValueError("Actor not found")
@@ -141,10 +141,10 @@ def update_instruction(
 
 
 def create_response(
-    output: str,
-    stage: str,
-    failure: str,
-    instruction_id: int,
+        output: str,
+        stage: str,
+        failure: str,
+        instruction_id: int,
 ) -> tuple:
     if not has_id(instructions, instruction_id):
         raise ValueError("Instruction not found")
@@ -176,11 +176,11 @@ def delete_response(uid: int) -> bool:
 
 
 def update_response(
-    uid: int,
-    output: str,
-    stage: str,
-    failure: str,
-    instruction_id: int,
+        uid: int,
+        output: str,
+        stage: str,
+        failure: str,
+        instruction_id: int,
 ) -> tuple:
     if not has_id(instructions, instruction_id):
         raise ValueError("Instruction not found")
@@ -218,6 +218,7 @@ def get_recent_responses() -> list:
                     )
 
     return result
+
 
 def read_instruction_data() -> tuple:
     input_text = input("input: ")
