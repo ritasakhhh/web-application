@@ -1,2 +1,2 @@
 @echo off
-python src/first_step.py
+py src\first_step.py

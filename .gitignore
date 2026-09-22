@@ -1,2 +1,15 @@
-.venv
-.idea
+__pycache__/
+*.pyc
+*.pyo
+
+.venv/
+venv/
+
+.idea/
+.vscode/
+
+.DS_Store
+
+.coverage
+htmlcov/
+.hypothesis/
