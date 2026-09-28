@@ -20,8 +20,8 @@ class RpcClient:
         ).encode("utf-8")
 
         request_header = (
-            len(request_body).to_bytes(3, "big")
-            + bytes([operation])
+                len(request_body).to_bytes(3, "big")
+                + bytes([operation])
         )
 
         with socket.create_connection((HOST, PORT)) as sock:
@@ -75,12 +75,12 @@ class RpcClient:
         )
 
     def create_instruction(
-        self,
-        input_text,
-        actor_id,
-        description,
-        tags,
-        stage,
+            self,
+            input_text,
+            actor_id,
+            description,
+            tags,
+            stage,
     ):
         return self._call(
             "create_instruction",
@@ -98,13 +98,13 @@ class RpcClient:
         return self._call("get_instructions")
 
     def update_instruction(
-        self,
-        uid,
-        input_text,
-        actor_id,
-        description,
-        tags,
-        stage,
+            self,
+            uid,
+            input_text,
+            actor_id,
+            description,
+            tags,
+            stage,
     ):
         return self._call(
             "update_instruction",
@@ -117,11 +117,11 @@ class RpcClient:
         )
 
     def create_response(
-        self,
-        output,
-        stage,
-        failure,
-        instruction_id,
+            self,
+            output,
+            stage,
+            failure,
+            instruction_id,
     ):
         return self._call(
             "create_response",
@@ -138,12 +138,12 @@ class RpcClient:
         return self._call("get_responses")
 
     def update_response(
-        self,
-        uid,
-        output,
-        stage,
-        failure,
-        instruction_id,
+            self,
+            uid,
+            output,
+            stage,
+            failure,
+            instruction_id,
     ):
         return self._call(
             "update_response",
