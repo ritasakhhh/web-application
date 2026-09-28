@@ -1,2 +1,3 @@
 @echo off
-py src\first_step.py
+cd /d "%~dp0"
+py src\rpc_server.py
