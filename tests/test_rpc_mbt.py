@@ -487,16 +487,21 @@ class RpcStateMachine(RuleBasedStateMachine):
         self.check_model()
 
 
-class TestRpcStateMachine(RpcStateMachine.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        server_thread = threading.Thread(
-            target=rpc_server.main,
-            daemon=True,
-        )
-        server_thread.start()
+def start_test_server():
+    server_thread = threading.Thread(
+        target=rpc_server.main,
+        daemon=True,
+    )
+    server_thread.start()
 
-        time.sleep(SERVER_START_DELAY)
+    time.sleep(SERVER_START_DELAY)
+
+
+start_test_server()
+
+
+class TestRpcStateMachine(RpcStateMachine.TestCase):
+    pass
 
 
 TestRpcStateMachine.settings = settings(
