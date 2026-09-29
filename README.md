@@ -59,3 +59,39 @@
 
 ```bash
 py src/rpc_server.py
+```
+## Этап 3. Model-Based Testing
+
+Для тестирования используется `RuleBasedStateMachine`
+из библиотеки Hypothesis.
+
+В `tests/test_rpc_mbt.py` реализованы отдельные правила
+для всех 13 RPC-методов.
+
+Состояние RPC-сервера сравнивается с состоянием упрощённой модели.
+При ошибке выводится имя RPC-функции, на которой произошёл сбой.
+
+Для тестов сервер автоматически запускается на порту `5001`.
+
+Запуск тестов:
+
+```powershell
+$env:PYTHONPATH="src"
+py -m unittest discover -s tests -p "test_*.py"
+```
+
+Проверка покрытия ветвей:
+
+```powershell
+py -m coverage run --branch -m unittest discover -s tests -p "test_*.py"
+py -m coverage report -m
+```
+
+## Пример RPC-вызова
+
+```python
+client.create_actor("Windows", "Chrome")
+```
+
+Клиент отправляет запрос по TCP, сервер вызывает
+`create_actor()` и возвращает результат клиенту.
