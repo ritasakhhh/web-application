@@ -105,7 +105,7 @@ def main():
         server.bind((HOST, PORT))
         server.listen()
 
-        print(f"RPC server started on {HOST}:{PORT}")
+        print("RPC server started on {}:{}".format(HOST, PORT))
 
         while True:
             connection, address = server.accept()
