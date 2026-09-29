@@ -43,106 +43,92 @@ class RpcStateMachine(RuleBasedStateMachine):
         first_step.responses.clear()
 
         self.client = rpc_client.RPCClient()
+
         self.actors = {}
         self.instructions = {}
         self.responses = {}
 
-    def prepare_actor(self):
-        actor = self.client.create_actor("base", "agent")
-        actor_id = actor[0]
+        self.last_action = "initialize"
 
-        self.actors[actor_id] = [
-            actor_id,
-            actor[1],
+    def rpc_call(self, name, *args):
+        self.last_action = name
+        method = getattr(self.client, name)
+
+        try:
+            return method(*args)
+        except Exception as error:
+            message = f"{name}: RPC call failed: {error}"
+            raise AssertionError(message) from error
+
+    def assert_result(self, name, result, expected):
+        if result != expected:
+            message = (
+                f"{name}: expected {expected}, "
+                f"got {result}"
+            )
+            raise AssertionError(message)
+
+    @initialize()
+    def initialize_data(self):
+        actor = self.rpc_call(
+            "create_actor",
             "base",
             "agent",
-        ]
-
-        updated = self.client.update_actor(
-            actor_id,
-            "updated",
-            "browser",
         )
-        self.actors[actor_id] = updated
+        self.actors[actor[0]] = actor
 
-        temporary = self.client.create_actor("temp", "temp")
-        self.client.delete_actor(temporary[0])
-
-        return actor_id
-
-    def prepare_instruction(self, actor_id):
-        instruction = self.client.create_instruction(
+        instruction = self.rpc_call(
+            "create_instruction",
             "input",
-            actor_id,
+            actor[0],
             "description",
             "tags",
             "new",
         )
-        instruction_id = instruction[0]
+        self.instructions[instruction[0]] = instruction
 
-        updated = self.client.update_instruction(
-            instruction_id,
-            "updated",
-            actor_id,
-            "updated_description",
-            "updated_tags",
-            "running",
-        )
-        self.instructions[instruction_id] = updated
-
-        temporary = self.client.create_instruction(
-            "temp",
-            actor_id,
-            "temp",
-            "temp",
-            "temp",
-        )
-        self.client.delete_instruction(temporary[0])
-
-        return instruction_id
-
-    def prepare_response(self, instruction_id):
-        response = self.client.create_response(
+        response = self.rpc_call(
+            "create_response",
             "output",
             "done",
             "",
-            instruction_id,
+            instruction[0],
         )
-        response_id = response[0]
-
-        updated = self.client.update_response(
-            response_id,
-            "updated_output",
-            "completed",
-            "",
-            instruction_id,
-        )
-        self.responses[response_id] = updated
-
-        temporary = self.client.create_response(
-            "temp",
-            "temp",
-            "",
-            instruction_id,
-        )
-        self.client.delete_response(temporary[0])
-
-    @initialize()
-    def initialize_data(self):
-        actor_id = self.prepare_actor()
-        instruction_id = self.prepare_instruction(actor_id)
-        self.prepare_response(instruction_id)
-        self.check_model()
+        self.responses[response[0]] = response
 
     @rule(platform=TEXT, user_agent=TEXT)
     def create_actor(self, platform, user_agent):
         expected_id = get_next_id(self.actors)
-        actor = self.client.create_actor(platform, user_agent)
 
-        assert actor[0] == expected_id
-        assert actor[2:] == [platform, user_agent]
+        actor = self.rpc_call(
+            "create_actor",
+            platform,
+            user_agent,
+        )
 
-        self.actors[expected_id] = actor
+        self.assert_result(
+            "create_actor",
+            actor[0],
+            expected_id,
+        )
+        self.assert_result(
+            "create_actor",
+            actor[2:],
+            [platform, user_agent],
+        )
+
+        self.actors[actor[0]] = actor
+
+    @rule()
+    def get_actors(self):
+        result = self.rpc_call("get_actors")
+        expected = list(self.actors.values())
+
+        self.assert_result(
+            "get_actors",
+            result,
+            expected,
+        )
 
     @precondition(lambda self: bool(self.actors))
     @rule(platform=TEXT, user_agent=TEXT)
@@ -157,13 +143,18 @@ class RpcStateMachine(RuleBasedStateMachine):
             user_agent,
         ]
 
-        result = self.client.update_actor(
+        result = self.rpc_call(
+            "update_actor",
             actor_id,
             platform,
             user_agent,
         )
 
-        assert result == expected
+        self.assert_result(
+            "update_actor",
+            result,
+            expected,
+        )
         self.actors[actor_id] = expected
 
     @precondition(lambda self: bool(self.actors))
@@ -171,7 +162,16 @@ class RpcStateMachine(RuleBasedStateMachine):
     def delete_actor(self):
         actor_id = next(iter(self.actors))
 
-        assert self.client.delete_actor(actor_id) is True
+        result = self.rpc_call(
+            "delete_actor",
+            actor_id,
+        )
+
+        self.assert_result(
+            "delete_actor",
+            result,
+            True,
+        )
         del self.actors[actor_id]
 
     @precondition(lambda self: bool(self.actors))
@@ -191,7 +191,8 @@ class RpcStateMachine(RuleBasedStateMachine):
         actor_id = next(iter(self.actors))
         expected_id = get_next_id(self.instructions)
 
-        instruction = self.client.create_instruction(
+        result = self.rpc_call(
+            "create_instruction",
             input_text,
             actor_id,
             description,
@@ -199,11 +200,39 @@ class RpcStateMachine(RuleBasedStateMachine):
             stage,
         )
 
-        assert instruction[0] == expected_id
-        self.instructions[expected_id] = instruction
+        expected = [
+            expected_id,
+            result[1],
+            input_text,
+            actor_id,
+            description,
+            tags,
+            stage,
+        ]
+
+        self.assert_result(
+            "create_instruction",
+            result,
+            expected,
+        )
+        self.instructions[expected_id] = result
+
+    @rule()
+    def get_instructions(self):
+        result = self.rpc_call("get_instructions")
+        expected = list(self.instructions.values())
+
+        self.assert_result(
+            "get_instructions",
+            result,
+            expected,
+        )
 
     @precondition(
-        lambda self: bool(self.instructions) and bool(self.actors)
+        lambda self: (
+                bool(self.instructions)
+                and bool(self.actors)
+        )
     )
     @rule(
         input_text=TEXT,
@@ -232,7 +261,8 @@ class RpcStateMachine(RuleBasedStateMachine):
             stage,
         ]
 
-        result = self.client.update_instruction(
+        result = self.rpc_call(
+            "update_instruction",
             instruction_id,
             input_text,
             actor_id,
@@ -241,7 +271,11 @@ class RpcStateMachine(RuleBasedStateMachine):
             stage,
         )
 
-        assert result == expected
+        self.assert_result(
+            "update_instruction",
+            result,
+            expected,
+        )
         self.instructions[instruction_id] = expected
 
     @precondition(lambda self: bool(self.instructions))
@@ -249,31 +283,85 @@ class RpcStateMachine(RuleBasedStateMachine):
     def delete_instruction(self):
         instruction_id = next(iter(self.instructions))
 
-        assert self.client.delete_instruction(instruction_id) is True
+        result = self.rpc_call(
+            "delete_instruction",
+            instruction_id,
+        )
+
+        self.assert_result(
+            "delete_instruction",
+            result,
+            True,
+        )
         del self.instructions[instruction_id]
 
     @precondition(lambda self: bool(self.instructions))
-    @rule(output=TEXT, stage=TEXT, failure=TEXT)
-    def create_response(self, output, stage, failure):
+    @rule(
+        output=TEXT,
+        stage=TEXT,
+        failure=TEXT,
+    )
+    def create_response(
+            self,
+            output,
+            stage,
+            failure,
+    ):
         instruction_id = next(iter(self.instructions))
         expected_id = get_next_id(self.responses)
 
-        response = self.client.create_response(
+        result = self.rpc_call(
+            "create_response",
             output,
             stage,
             failure,
             instruction_id,
         )
 
-        assert response[0] == expected_id
-        self.responses[expected_id] = response
+        expected = [
+            expected_id,
+            result[1],
+            output,
+            stage,
+            failure,
+            instruction_id,
+        ]
+
+        self.assert_result(
+            "create_response",
+            result,
+            expected,
+        )
+        self.responses[expected_id] = result
+
+    @rule()
+    def get_responses(self):
+        result = self.rpc_call("get_responses")
+        expected = list(self.responses.values())
+
+        self.assert_result(
+            "get_responses",
+            result,
+            expected,
+        )
 
     @precondition(
-        lambda self: bool(self.responses)
-                     and bool(self.instructions)
+        lambda self: (
+                bool(self.responses)
+                and bool(self.instructions)
+        )
     )
-    @rule(output=TEXT, stage=TEXT, failure=TEXT)
-    def update_response(self, output, stage, failure):
+    @rule(
+        output=TEXT,
+        stage=TEXT,
+        failure=TEXT,
+    )
+    def update_response(
+            self,
+            output,
+            stage,
+            failure,
+    ):
         response_id = next(iter(self.responses))
         instruction_id = next(iter(self.instructions))
         old_response = self.responses[response_id]
@@ -287,7 +375,8 @@ class RpcStateMachine(RuleBasedStateMachine):
             instruction_id,
         ]
 
-        result = self.client.update_response(
+        result = self.rpc_call(
+            "update_response",
             response_id,
             output,
             stage,
@@ -295,7 +384,11 @@ class RpcStateMachine(RuleBasedStateMachine):
             instruction_id,
         )
 
-        assert result == expected
+        self.assert_result(
+            "update_response",
+            result,
+            expected,
+        )
         self.responses[response_id] = expected
 
     @precondition(lambda self: bool(self.responses))
@@ -303,37 +396,91 @@ class RpcStateMachine(RuleBasedStateMachine):
     def delete_response(self):
         response_id = next(iter(self.responses))
 
-        assert self.client.delete_response(response_id) is True
+        result = self.rpc_call(
+            "delete_response",
+            response_id,
+        )
+
+        self.assert_result(
+            "delete_response",
+            result,
+            True,
+        )
         del self.responses[response_id]
+
+    @rule()
+    def get_recent_responses(self):
+        result = self.rpc_call(
+            "get_recent_responses"
+        )
+        expected = self.get_recent_model()
+
+        self.assert_result(
+            "get_recent_responses",
+            result,
+            expected,
+        )
 
     def get_recent_model(self):
         current_time = int(time.time())
         result = []
 
         for instruction in self.instructions.values():
-            if instruction[1] >= current_time - SIX_MINUTES:
+            is_recent = (
+                    instruction[1]
+                    >= current_time - SIX_MINUTES
+            )
+
+            if is_recent:
                 for response in self.responses.values():
                     if instruction[0] == response[5]:
                         result.append(
-                            [instruction[4], response[2]]
+                            [
+                                instruction[4],
+                                response[2],
+                            ]
                         )
 
         return result
 
     def check_model(self):
-        assert self.client.get_actors() == list(
-            self.actors.values()
-        )
-        assert self.client.get_instructions() == list(
+        action = self.last_action
+
+        actors = self.rpc_call("get_actors")
+        instructions = self.rpc_call("get_instructions")
+        responses = self.rpc_call("get_responses")
+        recent = self.rpc_call("get_recent_responses")
+
+        self.last_action = action
+
+        expected_actors = list(self.actors.values())
+        expected_instructions = list(
             self.instructions.values()
         )
-        assert self.client.get_responses() == list(
+        expected_responses = list(
             self.responses.values()
         )
-        assert (
-                self.client.get_recent_responses()
-                == self.get_recent_model()
-        )
+        expected_recent = self.get_recent_model()
+
+        if actors != expected_actors:
+            raise AssertionError(
+                f"{action}: Actor model mismatch"
+            )
+
+        if instructions != expected_instructions:
+            raise AssertionError(
+                f"{action}: Instruction model mismatch"
+            )
+
+        if responses != expected_responses:
+            raise AssertionError(
+                f"{action}: Response model mismatch"
+            )
+
+        if recent != expected_recent:
+            raise AssertionError(
+                f"{action}: recent responses mismatch"
+            )
 
     @invariant()
     def model_matches_rpc(self):
@@ -348,11 +495,12 @@ class TestRpcStateMachine(RpcStateMachine.TestCase):
             daemon=True,
         )
         server_thread.start()
+
         time.sleep(SERVER_START_DELAY)
 
 
 TestRpcStateMachine.settings = settings(
-    max_examples=10,
-    stateful_step_count=10,
+    max_examples=20,
+    stateful_step_count=25,
     deadline=None,
 )
