@@ -42,7 +42,7 @@ class RpcStateMachine(RuleBasedStateMachine):
         first_step.instructions.clear()
         first_step.responses.clear()
 
-        self.client = rpc_client.RPCClient()
+        self.client = rpc_client.RpcClient()
 
         self.actors = {}
         self.instructions = {}
