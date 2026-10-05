@@ -486,6 +486,21 @@ class RpcStateMachine(RuleBasedStateMachine):
     def model_matches_rpc(self):
         self.check_model()
 
+    @rule(uid=st.integers(min_value=-100, max_value=-1))
+    def delete_missing_actor(self, uid):
+        self.last_action = "delete_actor"
+
+        try:
+            self.client.delete_actor(uid)
+        except ValueError as error:
+            self.assert_result(
+                "delete_actor", str(error), "Actor not found"
+            )
+        else:
+            raise AssertionError(
+                "delete_actor: missing Actor was deleted"
+            )
+
 
 def start_test_server():
     server_thread = threading.Thread(
