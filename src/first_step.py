@@ -11,7 +11,12 @@ def get_current_time() -> int:
     return int(datetime.datetime.now().timestamp())
 
 
-def get_next_id(table: list) -> int:
+def get_next_id(table: list, uid: int | None = None) -> int:
+    if uid is not None:
+        if has_id(table, uid):
+            raise ValueError("Identifier already exists")
+        return uid
+
     if len(table) == 0:
         return 0
 
@@ -29,9 +34,10 @@ def has_id(table: list, uid: int) -> bool:
 def create_actor(
         platform: str,
         user_agent: str,
+        uid: int | None = None,
 ) -> tuple:
     actor = (
-        get_next_id(actors),
+        get_next_id(actors, uid),
         get_current_time(),
         platform,
         user_agent,
@@ -80,12 +86,13 @@ def create_instruction(
         description: str,
         tags: str,
         stage: str,
+        uid: int | None = None,
 ) -> tuple:
     if not has_id(actors, actor_id):
         raise ValueError("Actor not found")
 
     instruction = (
-        get_next_id(instructions),
+        get_next_id(instructions, uid),
         get_current_time(),
         input_text,
         actor_id,
@@ -145,12 +152,13 @@ def create_response(
         stage: str,
         failure: str,
         instruction_id: int,
+        uid: int | None = None,
 ) -> tuple:
     if not has_id(instructions, instruction_id):
         raise ValueError("Instruction not found")
 
     response = (
-        get_next_id(responses),
+        get_next_id(responses, uid),
         get_current_time(),
         output,
         stage,
