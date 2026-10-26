@@ -105,4 +105,49 @@ client.create_actor("Windows", "Chrome")
 Запуск:
 
 ```powershell
+```
 py src\converter.py
+
+## Практическая работа №2. Этап 2
+
+Реализованы 10 HTTP-обработчиков варианта №22 на FastAPI.
+Ответы возвращаются в JSON. Используется модель из `first_step.py`.
+
+Преобразование PNG в JPEG выполняется в фоне через запуск
+`converter.py` модулем `subprocess`. Отчёт содержит описание
+и результат задач, созданных за последние 6 минут.
+
+### Установка зависимостей
+
+```powershell
+py -m pip install fastapi uvicorn httpx pillow hypothesis coverage flake8
+```
+
+### Запуск сервера
+
+```powershell
+.\run.bat api
+```
+
+В другом терминале запустить демонстрацию:
+
+```powershell
+py src/api_demo.py
+```
+
+Ввести свободный ID задачи и путь к PNG. JPEG сохраняется
+рядом с исходным файлом.
+
+### Тестирование и покрытие ветвей
+
+Тесты используют Hypothesis и обращаются к серверу через API-клиент.
+Сервер для тестов запускается автоматически.
+
+```powershell
+$env:PYTHONPATH = "src"
+py -m coverage run --branch --source=api,first_step,api_client -m unittest discover -s tests -p "test_api*.py"
+py -m coverage report -m
+```
+
+Для запуска сервера без реального преобразования перед запуском
+установить `$env:API_TEST_MODE = "1"`.
