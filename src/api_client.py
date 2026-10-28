@@ -11,12 +11,14 @@ HEADERS = {
 
 
 class ApiClient:
-    def __init__(self, base_url=DEFAULT_URL):
+    def __init__(self, base_url=DEFAULT_URL, session=None):
         self.base_url = base_url.rstrip("/")
-        self.session = httpx.Client(
-            timeout=REQUEST_TIMEOUT,
-            trust_env=False,
-        )
+        if session is None:
+            session = httpx.Client(
+                timeout=REQUEST_TIMEOUT,
+                trust_env=False,
+            )
+        self.session = session
 
     def close(self):
         self.session.close()
