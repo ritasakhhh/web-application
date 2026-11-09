@@ -105,8 +105,8 @@ client.create_actor("Windows", "Chrome")
 Запуск:
 
 ```powershell
-```
 py src\converter.py
+```
 
 ## Практическая работа №2. Этап 2
 

@@ -30,6 +30,7 @@ def running_api():
         with TestClient(application) as session:
             yield ApiClient("http://testserver", session=session)
 
+
 class ApiStateMachine(RuleBasedStateMachine):
     def __init__(self):
         super().__init__()
