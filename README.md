@@ -151,3 +151,45 @@ py -m coverage report -m
 
 Для запуска сервера без реального преобразования перед запуском
 установить `$env:API_TEST_MODE = "1"`.
+
+## Практическая работа №2. Этап 3. Подключение TinyDB
+
+HTTP API хранит клиентов, задачи и результаты в таблицах TinyDB
+`Actor`, `Instruction` и `Response`. Файл `api_db.json` создаётся
+в корне проекта. Сервер открывает базу при запуске и закрывает
+при остановке.
+
+### Установка и запуск
+
+```powershell
+py -m pip install tinydb
+.\run.bat api
+```
+
+В другом терминале запустите демонстрацию.
+
+```powershell
+py src/api_demo.py
+```
+
+Введите свободный ID задачи и путь к PNG. После завершения
+конвертации остановите и снова запустите сервер. Затем запросите
+сохранённую запись клиента.
+
+```powershell
+$headers = @{Accept = "application/json"}
+$url = "http://127.0.0.1:8000/private/api/v2/show/actor?uid=0"
+Invoke-RestMethod -Uri $url -Headers $headers
+```
+
+### Модельное тестирование и покрытие ветвей
+
+МБТ использует `RuleBasedStateMachine` из Hypothesis. Каждый прогон
+создаёт отдельную временную базу TinyDB. Тестовый режим пропускает
+реальную конвертацию, а запросы читают и сохраняют записи в базе.
+
+```powershell
+$env:PYTHONPATH = "src"
+py -m coverage run --branch --source=api,tinydb_store,api_client -m unittest discover -s tests -p "test_api_mbt.py"
+py -m coverage report -m
+```

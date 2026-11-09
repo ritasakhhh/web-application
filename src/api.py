@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 import subprocess
@@ -9,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
 
-import first_step
+from tinydb_store import TinyDbStore
 
 PREFIX = "/private/api/v2"
 JSON_TYPE = "application/json"
@@ -18,32 +19,7 @@ NOT_ACCEPTABLE = 406
 CONVERSION_TIMEOUT = 60
 CONVERTER = Path(__file__).with_name("converter.py")
 ACTIVE_STAGES = {"created", "running"}
-
-ACTOR_FIELDS = (
-    "uid",
-    "datetime",
-    "platform",
-    "user_agent",
-)
-
-INSTRUCTION_FIELDS = (
-    "uid",
-    "datetime",
-    "input",
-    "actor",
-    "description",
-    "tags",
-    "stage",
-)
-
-RESPONSE_FIELDS = (
-    "uid",
-    "datetime",
-    "output",
-    "stage",
-    "failure",
-    "instruction",
-)
+DB_PATH = Path(__file__).resolve().parents[1] / "api_db.json"
 
 router = APIRouter(prefix=PREFIX)
 
@@ -62,51 +38,6 @@ class InstructionUpdate(BaseModel):
     uid: int
     description: str
     tags: str
-
-
-def select_records(records, fields, **filters):
-    filters = {
-        key: value for key, value in filters.items() if value is not None
-    }
-
-    result = []
-
-    for record in records:
-        item = dict(zip(fields, record))
-
-        if all(item[key] == value for key, value in filters.items()):
-            result.append(item)
-
-    return result
-
-
-def get_instruction(uid):
-    records = select_records(
-        first_step.get_instructions(),
-        INSTRUCTION_FIELDS,
-        uid=uid,
-    )
-
-    if not records:
-        raise ValueError("Instruction not found")
-
-    return records[0]
-
-
-def revise_instruction(uid, **changes):
-    record = get_instruction(uid)
-    record.update(changes)
-
-    updated = first_step.update_instruction(
-        uid,
-        record["input"],
-        record["actor"],
-        record["description"],
-        record["tags"],
-        record["stage"],
-    )
-
-    return dict(zip(INSTRUCTION_FIELDS, updated))
 
 
 async def check_headers(request, call_next):
@@ -149,8 +80,8 @@ def run_converter(input_path, output_path):
     )
 
 
-async def convert_instruction(uid, test_mode):
-    instruction = revise_instruction(uid, stage="running")
+async def convert_instruction(store, uid, test_mode):
+    instruction = store.update("Instruction", uid, stage="running")
 
     output = ""
     failure = ""
@@ -173,66 +104,62 @@ async def convert_instruction(uid, test_mode):
         stage = "failed"
         failure = str(getattr(error, "stderr", None) or error).strip()
 
-    revise_instruction(uid, stage=stage)
+    store.update("Instruction", uid, stage=stage)
 
-    first_step.create_response(
-        output,
-        stage,
-        failure,
+    store.create(
+        "Response",
         uid,
-        uid=uid,
+        output=output,
+        stage=stage,
+        failure=failure,
+        instruction=uid,
     )
 
 
 @router.put("/submit/actor/{uid}")
 async def put_actor_submit(
+        request: Request,
         uid: int,
         platform: str,
         user_agent: str,
 ):
-    actor = first_step.create_actor(
-        platform,
-        user_agent,
-        uid=uid,
+    return request.app.state.store.create(
+        "Actor", uid, platform=platform, user_agent=user_agent,
     )
-
-    return dict(zip(ACTOR_FIELDS, actor))
 
 
 @router.delete("/pop/actor/{uid}")
-async def delete_actor_pop(uid: int):
-    if any(item[3] == uid for item in first_step.get_instructions()):
+async def delete_actor_pop(request: Request, uid: int):
+    store = request.app.state.store
+    if store.find("Instruction", actor=uid):
         raise ValueError("Actor has instructions")
 
-    first_step.delete_actor(uid)
+    if not store.delete("Actor", "uid", uid):
+        raise ValueError("Actor not found")
 
     return {"deleted": uid}
 
 
 @router.get("/show/actor")
 async def get_actor_show(
+        request: Request,
         uid: int | None = None,
         platform: str | None = None,
         user_agent: str | None = None,
 ):
-    return select_records(
-        first_step.get_actors(),
-        ACTOR_FIELDS,
-        uid=uid,
-        platform=platform,
-        user_agent=user_agent,
+    return request.app.state.store.find(
+        "Actor", uid=uid, platform=platform, user_agent=user_agent,
     )
 
 
 @router.post("/revise/actor")
-async def post_actor_revise(data: ActorUpdate):
-    actor = first_step.update_actor(
+async def post_actor_revise(request: Request, data: ActorUpdate):
+    return request.app.state.store.update(
+        "Actor",
         data.uid,
-        data.platform,
-        data.user_agent,
+        platform=data.platform,
+        user_agent=data.user_agent,
     )
-
-    return dict(zip(ACTOR_FIELDS, actor))
 
 
 @router.put("/submit/instruction/{uid}")
@@ -248,60 +175,58 @@ async def put_instruction_submit(
     if "\n" in input_text or "\r" in input_text:
         raise ValueError("Input path must not contain line breaks")
 
-    instruction = first_step.create_instruction(
-        input_text,
-        actor,
-        description,
-        tags,
-        "created",
-        uid=uid,
+    store = request.app.state.store
+    store.get("Actor", actor)
+    instruction = store.create(
+        "Instruction",
+        uid,
+        input=input_text,
+        actor=actor,
+        description=description,
+        tags=tags,
+        stage="created",
     )
 
     background_tasks.add_task(
         convert_instruction,
+        store,
         uid,
         request.app.state.test_mode,
     )
 
-    return dict(zip(INSTRUCTION_FIELDS, instruction))
+    return instruction
 
 
 @router.delete("/pop/instruction/{uid}")
-async def delete_instruction_pop(uid: int):
-    instruction = get_instruction(uid)
+async def delete_instruction_pop(request: Request, uid: int):
+    store = request.app.state.store
+    instruction = store.get("Instruction", uid)
 
     if instruction["stage"] in ACTIVE_STAGES:
         raise ValueError("Instruction is still running")
 
-    responses = first_step.get_responses().copy()
-
-    for response in responses:
-        if response[5] == uid:
-            first_step.delete_response(response[0])
-
-    first_step.delete_instruction(uid)
+    store.delete("Response", "instruction", uid)
+    store.delete("Instruction", "uid", uid)
 
     return {"deleted": uid}
 
 
 @router.get("/show/instruction/{actor}")
 async def get_instruction_show(
+        request: Request,
         actor: int,
         uid: int | None = None,
         stage: str | None = None,
 ):
-    return select_records(
-        first_step.get_instructions(),
-        INSTRUCTION_FIELDS,
-        actor=actor,
-        uid=uid,
-        stage=stage,
+    return request.app.state.store.find(
+        "Instruction", actor=actor, uid=uid, stage=stage,
     )
 
 
 @router.post("/revise/instruction")
-async def post_instruction_revise(data: InstructionUpdate):
-    return revise_instruction(
+async def post_instruction_revise(request: Request, data: InstructionUpdate):
+    return request.app.state.store.update(
+        "Instruction",
         data.uid,
         description=data.description,
         tags=data.tags,
@@ -310,31 +235,36 @@ async def post_instruction_revise(data: InstructionUpdate):
 
 @router.get("/show/response/{instruction}")
 async def get_response_show(
+        request: Request,
         instruction: int,
         stage: str | None = None,
 ):
-    return select_records(
-        first_step.get_responses(),
-        RESPONSE_FIELDS,
-        instruction=instruction,
-        stage=stage,
+    return request.app.state.store.find(
+        "Response", instruction=instruction, stage=stage,
     )
 
 
 @router.get("/show/report")
-async def get_report_show():
-    return [
-        {"description": description, "output": output}
-        for description, output in first_step.get_recent_responses()
-    ]
+async def get_report_show(request: Request):
+    return request.app.state.store.get_recent_responses()
 
 
-def create_app(test_mode=False):
+def create_app(test_mode=False, db_path=DB_PATH):
+    @asynccontextmanager
+    async def lifespan(application):
+        store = TinyDbStore(db_path)
+        application.state.store = store
+        try:
+            yield
+        finally:
+            store.close()
+
     application = FastAPI(
         title="PNG to JPEG",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
     )
 
     application.state.test_mode = test_mode

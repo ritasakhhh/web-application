@@ -1,12 +1,12 @@
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from hypothesis import settings, strategies as st
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, invariant, rule
 
-import first_step
 from api import create_app
 from api_client import ApiClient
 
@@ -24,13 +24,11 @@ STAGES = st.sampled_from([None, "created", "running", "done", "failed"])
 
 @contextmanager
 def running_api():
-    first_step.actors.clear()
-    first_step.instructions.clear()
-    first_step.responses.clear()
-
-    with TestClient(create_app(test_mode=True)) as session:
-        yield ApiClient("http://testserver", session=session)
-
+    with TemporaryDirectory() as folder:
+        db_path = Path(folder) / "test_api.json"
+        application = create_app(test_mode=True, db_path=db_path)
+        with TestClient(application) as session:
+            yield ApiClient("http://testserver", session=session)
 
 class ApiStateMachine(RuleBasedStateMachine):
     def __init__(self):
@@ -38,7 +36,7 @@ class ApiStateMachine(RuleBasedStateMachine):
 
         self.resources = ExitStack()
         self.clock = self.resources.enter_context(patch(
-            "first_step.get_current_time",
+            "tinydb_store.get_current_time",
             return_value=INITIAL_TIME,
         ))
         self.client = self.resources.enter_context(running_api())
